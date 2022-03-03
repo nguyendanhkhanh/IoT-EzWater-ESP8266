@@ -25,10 +25,11 @@ unsigned long rst_millis;
 
 /*************************pin Setup *********************************/
 const int DHTpin = 4; //đọc data từ chân  gpio4
-const int RL1pin = 14;
-const int RL2pin = 12;
-const int RL3pin = 13;
-const int RL4pin = 15;
+const int RL1pin = 13;
+const int RL2pin = 15;
+const int RL3pin = 9;
+const int RL4pin = 10;
+const int RL0pin = 12; // may bom
 
 const int ON = HIGH;
 const int OFF = LOW;
@@ -51,6 +52,10 @@ unsigned long readTime;
 unsigned long feedBackTime;
 unsigned long alarmTime;
 unsigned long confirmTime;
+unsigned long waterTime1;
+unsigned long waterTime2;
+unsigned long waterTime3;
+unsigned long waterTime4;
 /*************************Instance Setup ************************************/
 //tạo 1 client
 WiFiClient myClient;
@@ -225,23 +230,26 @@ void setup()
   Serial.println("connected to MQTT server.....");
 
   //nhận dữ liệu có topic "ESPn" từ server
+  mqtt.subscribe("ESPn/RL0");
   mqtt.subscribe("ESPn/RL1");
   mqtt.subscribe("ESPn/RL2");
   mqtt.subscribe("ESPn/RL3");
   mqtt.subscribe("ESPn/RL4");
-  mqtt.subscribe("APPgH1/RL1");
-  mqtt.subscribe("APPgM1/RL1");
-  mqtt.subscribe("APPgH2/RL1");
-  mqtt.subscribe("APPgM2/RL1");
+//  mqtt.subscribe("APPgH1/RL1");
+//  mqtt.subscribe("APPgM1/RL1");
+//  mqtt.subscribe("APPgH2/RL1");
+//  mqtt.subscribe("APPgM2/RL1");
 
   //set mode
   pinMode(DHTpin, INPUT);
+  pinMode(RL0pin, OUTPUT);
   pinMode(RL1pin, OUTPUT);
   pinMode(RL2pin, OUTPUT);
   pinMode(RL3pin, OUTPUT);
   pinMode(RL4pin, OUTPUT);
 
   //set bit first time
+  digitalWrite(RL0pin, OFF);
   digitalWrite(RL1pin, OFF);
   digitalWrite(RL2pin, OFF);
   digitalWrite(RL3pin, OFF);
@@ -280,14 +288,14 @@ void loop()
   //phản hồi trạng thái relay lên server
   if (mqtt.connected())
   {
-    if (millis() > feedBackTime + 1000)
+    if (millis() > feedBackTime + 2000)
     {
       feedBack();
     }
 
 
     //check if 5 seconds has elapsed since the last time we read the sensors.
-    if (millis() > readTime + 5000)
+    if (millis() > readTime + 300000)
     {
       sensorRead();
     }
@@ -335,20 +343,59 @@ void callback(char *tp, byte *message, unsigned int length)
   String content = String((char *)message);
   content.remove(length);
 
-  //điều khiển relay 1
-  if (topic == "ESPn/RL1")
+  //điều khiển relay maybom
+  if (topic == "ESPn/RL0")
   {
     if (content == "1")
     {
-      digitalWrite(RL1pin, ON);
+      digitalWrite(RL0pin, ON);
       Serial.println("relay 1 ON");
     }
     if (content == "0")
     {
-      digitalWrite(RL1pin, OFF);
+      digitalWrite(RL0pin, OFF);
       Serial.println("relay 1 OFF");
     }
   }
+
+//  // Get MacAddress and remove ":"
+//  String MacAddress = WiFi.macAddress();
+//            MacAddress.remove(2,1);
+//            MacAddress.remove(4,1);
+//            MacAddress.remove(6,1);
+//            MacAddress.remove(8,1);
+//            MacAddress.remove(10,1);
+//            // init mqttChannel
+//  String mqttMainChannel = "ESPs/status/";
+//  String mqttChannel = mqttMainChannel + MacAddress;
+//  
+//  //điều khiển relay 1
+//  if (topic == "ESPn/RL1")
+//  {
+//    if (content == "1")
+//    {
+//      digitalWrite(RL1pin, ON);
+//      Serial.println("relay 1 ON");
+//      waterTime1 = millis();
+//    }
+//    if (content == "0")
+//    {
+//      if (digitalRead(RL1pin) == 1) {
+//
+//          
+//            // convert data to JSON
+//            StaticJsonDocument<200> docStatus;
+//            JsonObject contentStatus  = docStatus.to<JsonObject>();
+//            docStatus["relay_id"] = "1";
+//            docStatus["water_amout"]   = 50;
+//            docStatus["water_time"]   = millis() - waterTime1;
+//            char content_string[256];
+//            serializeJson(contentStatus, content_string);
+//      }
+//      digitalWrite(RL1pin, OFF);
+//      Serial.println("relay 1 OFF");
+//    }
+//  }
 
   //điều khiển relay 2
   if (topic == "ESPn/RL2")
@@ -440,9 +487,10 @@ void sensorRead()
     // Serial.print(temperature);
     // Serial.println("độ c");
   */
-  //Doc do am dat
+  //Doc do am dat relay 1
+  
   //kiểm tra sensor dat có hoạt động??
-  if (isnan(analogRead(A0)))
+  if (isnan(analogRead(16)))
   {
     Serial.println("Failed to read from Soil sensor!");
     return;
@@ -450,6 +498,7 @@ void sensorRead()
   for (int i = 1; i <= 10; i++)
   {
     realvalue += analogRead(A0);
+    Serial.println(analogRead(A0));
   }
   value_soil = realvalue / 10;
   realvalue = 0 ;
@@ -483,6 +532,33 @@ void sensorRead()
 
   // push data to mqtt
   mqtt.publish(mqttChannel.c_str(), content_string);
+
+  // init mqttChannel for server
+  String mqttMainChannelServer = "ESPs/enviroment/server/";
+  String mqttChannelServer = mqttMainChannelServer + MacAddress;
+
+  // convert data to JSON
+  StaticJsonDocument<200> docServer1;
+  JsonObject contentServer1  = docServer1.to<JsonObject>();
+  docServer1["temperature"] = temperature;
+  docServer1["humidity"]   = humidity;
+  docServer1["soil_humidity"]   = percent_soil;
+  docServer1["relay_id"] = "1";
+
+  char content_string_server[256];
+  serializeJson(contentServer1, content_string_server);
+  // push data to mqtt
+  mqtt.publish(mqttChannel.c_str(), content_string_server);
+
+  StaticJsonDocument<200> docServer2;
+  JsonObject contentServer2  = docServer2.to<JsonObject>();
+  docServer2["temperature"] = temperature;
+  docServer2["humidity"]   = humidity;
+  docServer2["soil_humidity"]   = percent_soil;
+  docServer2["relay_id"] = "2";
+  serializeJson(contentServer2, content_string_server);
+  mqtt.publish(mqttChannel.c_str(), content_string_server);
+
 }
 
 //*********************** hàm reconnect **********************
@@ -523,10 +599,10 @@ void reconnect()
       mqtt.subscribe("ESPn/RL2");
       mqtt.subscribe("ESPn/RL3");
       mqtt.subscribe("ESPn/RL4");
-      mqtt.subscribe("APPgH1/RL1");
-      mqtt.subscribe("APPgM1/RL1");
-      mqtt.subscribe("APPgH2/RL1");
-      mqtt.subscribe("APPgM2/RL1");
+//      mqtt.subscribe("APPgH1/RL1");
+//      mqtt.subscribe("APPgM1/RL1");
+//      mqtt.subscribe("APPgH2/RL1");
+//      mqtt.subscribe("APPgM2/RL1");
       return;
     }
     else
@@ -543,6 +619,22 @@ void reconnect()
 void feedBack() {
   feedBackTime = millis();
 
+  if (isnan(analogRead(16)))
+  {
+    Serial.println("Failed to read from Soil sensor!");
+    return;
+  }
+  for (int i = 1; i <= 10; i++)
+  {
+    realvalue += analogRead(A0);
+    Serial.println(analogRead(A0));
+  }
+  value_soil = realvalue / 10;
+  realvalue = 0 ;
+  int percent_soil = map (value_soil, 892, 1024, 0 , 100); //chuyen gia tri do am dat ve phan tram
+  percent_soil = 100 - percent_soil;
+  delay(2000);
+
   // Get MacAddress and remove ":"
   String MacAddress = WiFi.macAddress();
   MacAddress.remove(2,1);
@@ -552,41 +644,55 @@ void feedBack() {
   MacAddress.remove(10,1);
   Serial.println(MacAddress);
   // init mqttChannel
-  String mqttMainChannel = "ESPs/status/realtime/";
+  String mqttMainChannel = "ESPs/RL/";
   String mqttChannel = mqttMainChannel + MacAddress;
-
+  const size_t CAPACITY = JSON_ARRAY_SIZE(500);
+  StaticJsonDocument<CAPACITY> docArr;
+  JsonArray array = docArr.to<JsonArray>();
+  
   // convert data to JSON
   StaticJsonDocument<200> doc;
   JsonObject content_1  = doc.to<JsonObject>();
   doc["relay_id"] = 1;
   doc["status"]   = String(digitalRead(RL1pin));
+  doc["soil_humidity"] = percent_soil;
   char content_string_1[256];
   serializeJson(content_1, content_string_1);
   Serial.println(content_string_1);
+  array.add(content_1);
 
   JsonObject content_2  = doc.to<JsonObject>();
   doc["relay_id"] = 2;
   doc["status"]   = String(digitalRead(RL2pin));
+  doc["soil_humidity"] = percent_soil;
   char content_string_2[256];
   serializeJson(content_2, content_string_2);
+  array.add(content_2);
 
   JsonObject content_3  = doc.to<JsonObject>();  
   doc["relay_id"] = 3;
   doc["status"]   = String(digitalRead(RL3pin));;
+  doc["soil_humidity"] = percent_soil;
   char content_string_3[256];
   serializeJson(content_3, content_string_3);
+  array.add(content_3);
 
   JsonObject content_4  = doc.to<JsonObject>();
   doc["relay_id"] = 4;
   doc["status"]   = String(digitalRead(RL4pin));
+  doc["soil_humidity"] = percent_soil;
   char content_string_4[256];
   serializeJson(content_4, content_string_4);
+  array.add(content_4);
 
+  char content_string_0[512];
+  serializeJson(array, content_string_0);
   // push data to mqtt
   mqtt.publish(mqttChannel.c_str(), content_string_1);
   mqtt.publish(mqttChannel.c_str(), content_string_2);
   mqtt.publish(mqttChannel.c_str(), content_string_3);
   mqtt.publish(mqttChannel.c_str(), content_string_4);
+  mqtt.publish(mqttChannel.c_str(), content_string_0);
 
 //  mqtt.publish("ESPg/RL1", String(digitalRead(RL1pin)).c_str());
 //  mqtt.publish("ESPg/RL2", String(digitalRead(RL2pin)).c_str());

@@ -27,8 +27,8 @@ unsigned long rst_millis;
 const int DHTpin = 4; //đọc data từ chân  gpio4
 const int RL1pin = 13;
 const int RL2pin = 15;
-const int RL3pin = 9;
-const int RL4pin = 10;
+const int RL3pin = 13;
+const int RL4pin = 15;
 const int RL0pin = 12; // may bom
 
 const int ON = HIGH;
@@ -228,13 +228,17 @@ void setup()
       break;
   }
   Serial.println("connected to MQTT server.....");
-
+  String mqttRelay0 = "ESPn/RL0" + MacAddress;
+  String mqttRelay1 = "ESPn/RL1" + MacAddress;
+  String mqttRelay2 = "ESPn/RL2" + MacAddress;
+  String mqttRelay3 = "ESPn/RL3" + MacAddress;
+  String mqttRelay4 = "ESPn/RL4" + MacAddress;
   //nhận dữ liệu có topic "ESPn" từ server
-  mqtt.subscribe("ESPn/RL0");
-  mqtt.subscribe("ESPn/RL1");
-  mqtt.subscribe("ESPn/RL2");
-  mqtt.subscribe("ESPn/RL3");
-  mqtt.subscribe("ESPn/RL4");
+  mqtt.subscribe(mqttRelay0.c_str());
+  mqtt.subscribe(mqttRelay1.c_str());
+  mqtt.subscribe(mqttRelay2.c_str());
+  mqtt.subscribe(mqttRelay3.c_str());
+  mqtt.subscribe(mqttRelay4.c_str());
 //  mqtt.subscribe("APPgH1/RL1");
 //  mqtt.subscribe("APPgM1/RL1");
 //  mqtt.subscribe("APPgH2/RL1");
@@ -288,7 +292,7 @@ void loop()
   //phản hồi trạng thái relay lên server
   if (mqtt.connected())
   {
-    if (millis() > feedBackTime + 2000)
+    if (millis() > feedBackTime + 10000)
     {
       feedBack();
     }
@@ -338,13 +342,23 @@ void callback(char *tp, byte *message, unsigned int length)
   //bien nhan gio Bat, Tat tu client
   //Hien tai neu khong cap nhat, day se la thoi gian hang ngay
 
+  // Get MacAddress and remove ":"
+  String MacAddress = WiFi.macAddress();
+            MacAddress.remove(2,1);
+            MacAddress.remove(4,1);
+            MacAddress.remove(6,1);
+            MacAddress.remove(8,1);
+            MacAddress.remove(10,1);
+            // init mqttChannel
+  String mqttMainChannel = "ESPs/status/";
+  String mqttChannel = mqttMainChannel + MacAddress;
 
   String topic(tp);
   String content = String((char *)message);
   content.remove(length);
 
   //điều khiển relay maybom
-  if (topic == "ESPn/RL0")
+  if (topic == "ESPn/RL0" + MacAddress)
   {
     if (content == "1")
     {
@@ -357,63 +371,73 @@ void callback(char *tp, byte *message, unsigned int length)
       Serial.println("relay 1 OFF");
     }
   }
-
-//  // Get MacAddress and remove ":"
-//  String MacAddress = WiFi.macAddress();
-//            MacAddress.remove(2,1);
-//            MacAddress.remove(4,1);
-//            MacAddress.remove(6,1);
-//            MacAddress.remove(8,1);
-//            MacAddress.remove(10,1);
-//            // init mqttChannel
-//  String mqttMainChannel = "ESPs/status/";
-//  String mqttChannel = mqttMainChannel + MacAddress;
-//  
-//  //điều khiển relay 1
-//  if (topic == "ESPn/RL1")
-//  {
-//    if (content == "1")
-//    {
-//      digitalWrite(RL1pin, ON);
-//      Serial.println("relay 1 ON");
-//      waterTime1 = millis();
-//    }
-//    if (content == "0")
-//    {
-//      if (digitalRead(RL1pin) == 1) {
-//
-//          
-//            // convert data to JSON
-//            StaticJsonDocument<200> docStatus;
-//            JsonObject contentStatus  = docStatus.to<JsonObject>();
-//            docStatus["relay_id"] = "1";
-//            docStatus["water_amout"]   = 50;
-//            docStatus["water_time"]   = millis() - waterTime1;
-//            char content_string[256];
-//            serializeJson(contentStatus, content_string);
-//      }
-//      digitalWrite(RL1pin, OFF);
-//      Serial.println("relay 1 OFF");
-//    }
-//  }
+  
+  //điều khiển relay 1
+  if (topic == "ESPn/RL1" + MacAddress)
+  {
+    if (content == "1")
+    {
+      digitalWrite(RL1pin, ON);
+      Serial.println("relay 1 ON");
+      waterTime1 = millis();
+    }
+    if (content == "0")
+    {
+      if (digitalRead(RL1pin) == 1) {
+            // convert data to JSON
+            StaticJsonDocument<200> docStatus;
+            JsonObject contentStatus  = docStatus.to<JsonObject>();
+            docStatus["relay_id"] = "1";
+            docStatus["water_amout"]   = 50;
+            docStatus["water_time"]   = millis() - waterTime1;
+            char content_string[256];
+            serializeJson(contentStatus, content_string);
+            mqtt.publish(mqttChannel.c_str(), content_string);
+      }
+      digitalWrite(RL1pin, OFF);
+      
+      if(digitalRead(RL2pin) == 0&&digitalRead(RL3pin) == 0&&digitalRead(RL4pin) == 0) {
+        digitalWrite(RL0pin, OFF);
+      }
+      
+      Serial.println("relay 1 OFF");
+    }
+  }
 
   //điều khiển relay 2
-  if (topic == "ESPn/RL2")
+  if (topic == "ESPn/RL2" + MacAddress)
   {
     if (content == "1")
     {
       digitalWrite(RL2pin, ON);
       Serial.println("relay 2 ON");
+      waterTime2 = millis();
     }
     if (content == "0")
     {
+      if (digitalRead(RL2pin) == 1) {
+            // convert data to JSON
+            StaticJsonDocument<200> docStatus;
+            JsonObject contentStatus  = docStatus.to<JsonObject>();
+            docStatus["relay_id"] = "2";
+            docStatus["water_amout"]   = 50;
+            docStatus["water_time"]   = millis() - waterTime2;
+            char content_string[256];
+            serializeJson(contentStatus, content_string);
+            mqtt.publish(mqttChannel.c_str(), content_string);
+      }
       digitalWrite(RL2pin, OFF);
+
+      if(digitalRead(RL1pin) == 0&&digitalRead(RL3pin) == 0&&digitalRead(RL4pin) == 0) {
+        digitalWrite(RL0pin, OFF);
+      }
+      
       Serial.println("relay 2 OFF");
     }
   }
 
   //điều khiển relay 3
-  if (topic == "ESPn/RL3")
+  if (topic == "ESPn/RL3" + MacAddress)
   {
     if (content == "1")
     {
@@ -428,7 +452,7 @@ void callback(char *tp, byte *message, unsigned int length)
   }
 
   //điều khiển relay 4
-  if (topic == "ESPn/RL4")
+  if (topic == "ESPn/RL4" + MacAddress)
   {
     if (content == "1")
     {
@@ -595,10 +619,25 @@ void reconnect()
     if (mqtt.connected())
     {
       Serial.println("reconnected");
-      mqtt.subscribe("ESPn/RL1");
-      mqtt.subscribe("ESPn/RL2");
-      mqtt.subscribe("ESPn/RL3");
-      mqtt.subscribe("ESPn/RL4");
+        String MacAddress = WiFi.macAddress();
+        MacAddress.remove(2,1);
+        MacAddress.remove(4,1);
+        MacAddress.remove(6,1);
+        MacAddress.remove(8,1);
+        MacAddress.remove(10,1);
+        Serial.print("ESP8266 Board MAC Address:  ");
+        Serial.println(MacAddress);
+        String mqttRelay0 = "ESPn/RL0" + MacAddress;
+        String mqttRelay1 = "ESPn/RL1" + MacAddress;
+        String mqttRelay2 = "ESPn/RL2" + MacAddress;
+        String mqttRelay3 = "ESPn/RL3" + MacAddress;
+        String mqttRelay4 = "ESPn/RL4" + MacAddress;
+        //nhận dữ liệu có topic "ESPn" từ server
+        mqtt.subscribe(mqttRelay0.c_str());
+        mqtt.subscribe(mqttRelay1.c_str());
+        mqtt.subscribe(mqttRelay2.c_str());
+        mqtt.subscribe(mqttRelay3.c_str());
+        mqtt.subscribe(mqttRelay4.c_str());
 //      mqtt.subscribe("APPgH1/RL1");
 //      mqtt.subscribe("APPgM1/RL1");
 //      mqtt.subscribe("APPgH2/RL1");
@@ -653,7 +692,7 @@ void feedBack() {
   // convert data to JSON
   StaticJsonDocument<200> doc;
   JsonObject content_1  = doc.to<JsonObject>();
-  doc["relay_id"] = 1;
+  doc["relay_id"] = "1";
   doc["status"]   = String(digitalRead(RL1pin));
   doc["soil_humidity"] = percent_soil;
   char content_string_1[256];
@@ -662,7 +701,7 @@ void feedBack() {
   array.add(content_1);
 
   JsonObject content_2  = doc.to<JsonObject>();
-  doc["relay_id"] = 2;
+  doc["relay_id"] = "2";
   doc["status"]   = String(digitalRead(RL2pin));
   doc["soil_humidity"] = percent_soil;
   char content_string_2[256];
@@ -670,7 +709,7 @@ void feedBack() {
   array.add(content_2);
 
   JsonObject content_3  = doc.to<JsonObject>();  
-  doc["relay_id"] = 3;
+  doc["relay_id"] = "3";
   doc["status"]   = String(digitalRead(RL3pin));;
   doc["soil_humidity"] = percent_soil;
   char content_string_3[256];
@@ -678,7 +717,7 @@ void feedBack() {
   array.add(content_3);
 
   JsonObject content_4  = doc.to<JsonObject>();
-  doc["relay_id"] = 4;
+  doc["relay_id"] = "4";
   doc["status"]   = String(digitalRead(RL4pin));
   doc["soil_humidity"] = percent_soil;
   char content_string_4[256];
@@ -688,10 +727,10 @@ void feedBack() {
   char content_string_0[512];
   serializeJson(array, content_string_0);
   // push data to mqtt
-  mqtt.publish(mqttChannel.c_str(), content_string_1);
-  mqtt.publish(mqttChannel.c_str(), content_string_2);
-  mqtt.publish(mqttChannel.c_str(), content_string_3);
-  mqtt.publish(mqttChannel.c_str(), content_string_4);
+//  mqtt.publish(mqttChannel.c_str(), content_string_1);
+//  mqtt.publish(mqttChannel.c_str(), content_string_2);
+//  mqtt.publish(mqttChannel.c_str(), content_string_3);
+//  mqtt.publish(mqttChannel.c_str(), content_string_4);
   mqtt.publish(mqttChannel.c_str(), content_string_0);
 
 //  mqtt.publish("ESPg/RL1", String(digitalRead(RL1pin)).c_str());
